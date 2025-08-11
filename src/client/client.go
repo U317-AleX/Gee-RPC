@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gee-rpc"
+	"gee-rpc/service"
 	"gee-rpc/codec"
 	"io"
 	"log"
@@ -29,7 +29,7 @@ func (call *Call) done() {
 
 type Client struct {
 	cc codec.Codec // connnection, encoder and decoder
-	opt *geerpc.Option // codec type
+	opt *service.Option // codec type
 	sending sync.Mutex // make sure sending in order
 	header codec.Header
 	mu sync.Mutex // protect following
@@ -128,7 +128,7 @@ func (client *Client) receive() {
 // by sending Option information to the server. 
 // After negotiating the message encoding/decoding method, 
 // a sub-goroutine is created to call receive() to handle responses.
-func NewClient(conn net.Conn, opt *geerpc.Option) (*Client, error) {
+func NewClient(conn net.Conn, opt *service.Option) (*Client, error) {
 	f := codec.NewCodeFuncMap[opt.CodecType]
 	if f == nil {
 		err := fmt.Errorf("invalid codec type %s", opt.CodecType)
@@ -144,7 +144,7 @@ func NewClient(conn net.Conn, opt *geerpc.Option) (*Client, error) {
 	return newClientCodec(f(conn), opt), nil
 }
 
-func newClientCodec(cc codec.Codec, opt *geerpc.Option) *Client {
+func newClientCodec(cc codec.Codec, opt *service.Option) *Client {
 	client := &Client{
 		seq: 1, // seq starts with 1, 0 means invalid call
 		cc: cc,
@@ -155,19 +155,19 @@ func newClientCodec(cc codec.Codec, opt *geerpc.Option) *Client {
 	return client
 }
 
-func parseOption(opts ...*geerpc.Option) (*geerpc.Option, error) {
+func parseOption(opts ...*service.Option) (*service.Option, error) {
 	// if opts is nil or pass nil as parameter
 	// use default Option
 	if len(opts) == 0 || opts[0] == nil {
-		return geerpc.DefaultOption, nil
+		return service.DefaultOption, nil
 	}
 	if len(opts) != 1 {
 		return nil, errors.New("number of options is more than 1")
 	}
 	opt := opts[0]
-	opt.MagicNumber = geerpc.DefaultOption.MagicNumber
+	opt.MagicNumber = service.DefaultOption.MagicNumber
 	if opt.CodecType == "" {
-		opt.CodecType = geerpc.DefaultOption.CodecType
+		opt.CodecType = service.DefaultOption.CodecType
 	}
 	return opt, nil
 }
@@ -175,7 +175,7 @@ func parseOption(opts ...*geerpc.Option) (*geerpc.Option, error) {
 // Dial is an intermediary layer between NewClient and the user. 
 // It allows the user to avoid creating their own connection 
 // and provides a default Option
-func Dial(network, address string, opts ...*geerpc.Option) (client *Client, err error) {
+func Dial(network, address string, opts ...*service.Option) (client *Client, err error) {
 	opt, err := parseOption(opts...)
 	if err != nil {
 		return nil, err
