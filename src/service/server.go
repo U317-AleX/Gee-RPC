@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"gee-rpc/codec"
 	"io"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 )
 
 const MagicNumber = 0x3bef5c
@@ -22,12 +24,15 @@ const MagicNumber = 0x3bef5c
 type Option struct {
 	MagicNumber int // MagicNumber marks this rpc request
 	CodecType codec.Type // client may choose different Codec to encode body
+	ConnectTimeout time.Duration // 0 means no limit
+	HandleTimeout time.Duration
 }
 
 // if dosen't order any option, use this
 var DefaultOption = &Option{
 	MagicNumber: MagicNumber,
 	CodecType: codec.GobType,
+	ConnectTimeout: time.Second * 10,
 }
 
 // Server represents an RPC Server
@@ -110,7 +115,7 @@ func (server *Server) ServeConn(conn io.ReadWriteCloser) {
 		log.Printf("rpc server: invalid codec type %s", opt.CodecType)
 		return
 	}
-	server.serveCodec(f(conn))
+	server.serveCodec(f(conn), &opt)
 }
 
 
@@ -118,7 +123,7 @@ func (server *Server) ServeConn(conn io.ReadWriteCloser) {
 var invalidRequest = struct{}{}
 
 // serveCodec uses codec to read request and call handleRequest to handle it
-func (server *Server) serveCodec(cc codec.Codec) {
+func (server *Server) serveCodec(cc codec.Codec, opt *Option) {
 	sending := new(sync.Mutex) // make sure to send a complete response
 	wg := new(sync.WaitGroup)
 	for {
@@ -132,7 +137,7 @@ func (server *Server) serveCodec(cc codec.Codec) {
 			continue
 		}
 		wg.Add(1)
-		go server.handleRequest(cc, req, sending, wg)
+		go server.handleRequest(cc, req, sending, wg, opt.HandleTimeout)
 	}
 	wg.Wait()
 	_ = cc.Close()
@@ -197,13 +202,38 @@ func (server *Server) sendResponse(cc codec.Codec, h *codec.Header, body interfa
 }
 
 // handle request
-func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup) {
+func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup, timeout time.Duration) {
 	defer wg.Done()
-	err := req.svc.call(req.mtype, req.argv, req.replyv)
-	if err != nil {
-		req.h.Error = err.Error()
-		server.sendResponse(cc, req.h, invalidRequest, sending)
+	called := make(chan struct{})
+	sent := make(chan struct{})
+	go func() {
+		err := req.svc.call(req.mtype, req.argv, req.replyv)
+		called <- struct{}{} // method has been called
+		if err != nil {
+			req.h.Error = err.Error()
+			server.sendResponse(cc, req.h, invalidRequest, sending)
+			sent <- struct{}{} // have sent error info to client
+			return
+		}
+		server.sendResponse(cc, req.h, req.replyv.Interface(), sending)
+		sent <- struct{}{} // have sent success info to client
+	}()
+
+	// if timeout is 0, meaning there's no timeout
+	// simply wait called and sent signal to be sent and return
+	if timeout == 0 {
+		<- called
+		<- sent
 		return
 	}
-	server.sendResponse(cc, req.h, req.replyv.Interface(), sending)
+
+	// at timeout mement, if called, just wait for sent signal
+	// otherwise, send error info to the client
+	select {
+	case <-time.After(timeout):
+		req.h.Error = fmt.Sprintf("rpc server: request handle timeout: expect within %s", timeout)
+		server.sendResponse(cc, req.h, invalidRequest, sending)
+	case <- called:
+		<-sent
+	}
 }
