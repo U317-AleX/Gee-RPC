@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"reflect"
 	"strings"
 	"sync"
@@ -22,21 +23,21 @@ const MagicNumber = 0x3bef5c
 // server uses json decodes this struct and decodes the follows using
 // codec this struct identifies
 type Option struct {
-	MagicNumber int // MagicNumber marks this rpc request
-	CodecType codec.Type // client may choose different Codec to encode body
+	MagicNumber    int           // MagicNumber marks this rpc request
+	CodecType      codec.Type    // client may choose different Codec to encode body
 	ConnectTimeout time.Duration // 0 means no limit
-	HandleTimeout time.Duration
+	HandleTimeout  time.Duration
 }
 
 // if dosen't order any option, use this
 var DefaultOption = &Option{
-	MagicNumber: MagicNumber,
-	CodecType: codec.GobType,
+	MagicNumber:    MagicNumber,
+	CodecType:      codec.GobType,
 	ConnectTimeout: time.Second * 10,
 }
 
 // Server represents an RPC Server
-type Server struct{
+type Server struct {
 	serviceMap sync.Map
 }
 
@@ -100,7 +101,7 @@ func (server *Server) Accept(lis net.Listener) {
 func Accept(lis net.Listener) { DefaultServer.Accept(lis) }
 
 func (server *Server) ServeConn(conn io.ReadWriteCloser) {
-	defer func() {_ = conn.Close()}()
+	defer func() { _ = conn.Close() }()
 	var opt Option
 	if err := json.NewDecoder(conn).Decode(&opt); err != nil {
 		log.Println("rpc server: options error: ", err)
@@ -117,7 +118,6 @@ func (server *Server) ServeConn(conn io.ReadWriteCloser) {
 	}
 	server.serveCodec(f(conn), &opt)
 }
-
 
 // invalidRequest is a placeholder for response argv when error occurs
 var invalidRequest = struct{}{}
@@ -142,13 +142,13 @@ func (server *Server) serveCodec(cc codec.Codec, opt *Option) {
 	wg.Wait()
 	_ = cc.Close()
 }
- 
+
 // request stores all info of a call
 type request struct {
-	h *codec.Header // header of request
+	h            *codec.Header // header of request
 	argv, replyv reflect.Value // argv and reply of request, they're the request body
-	mtype *methodType // required method of this RPC
-	svc *service // required service of this RPC
+	mtype        *methodType   // required method of this RPC
+	svc          *service      // required service of this RPC
 }
 
 // read request header using codec and write it to h
@@ -179,7 +179,7 @@ func (server *Server) readRequest(cc codec.Codec) (*request, error) {
 	}
 	req.argv = req.mtype.newArgv()
 	req.replyv = req.mtype.newReplyv()
-	
+
 	// make sure that argvi is a pointer, ReadBody need a pointer as parameter
 	argvi := req.argv.Interface()
 	if req.argv.Type().Kind() != reflect.Ptr {
@@ -222,8 +222,8 @@ func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.
 	// if timeout is 0, meaning there's no timeout
 	// simply wait called and sent signal to be sent and return
 	if timeout == 0 {
-		<- called
-		<- sent
+		<-called
+		<-sent
 		return
 	}
 
@@ -233,7 +233,67 @@ func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.
 	case <-time.After(timeout):
 		req.h.Error = fmt.Sprintf("rpc server: request handle timeout: expect within %s", timeout)
 		server.sendResponse(cc, req.h, invalidRequest, sending)
-	case <- called:
+	case <-called:
 		<-sent
 	}
+}
+
+const (
+	Connected        = "200 Connected to Gee RPC"
+	DefaultRPCPath   = "/_geerpc_"
+	DefaultDebugPath = "/debug/geerpc"
+)
+
+// ServeHTTP is an HTTP request handler.
+// It implements the http.Handler interface, allowing this Server object to be used by Go's HTTP server.
+// This function is specifically designed to handle HTTP CONNECT requests to create a proxy tunnel.
+func (server *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if req.Method != "CONNECT" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, _ = io.WriteString(w, "405 must CONNECT\n")
+		return
+	}
+	
+	// Type assertion to check if http.ResponseWriter (w) implements the http.Hijacker interface.
+	// The Hijacker interface allows us to "hijack" the underlying TCP connection, taking control away from the HTTP server.
+	// This is the crucial step for switching from the HTTP protocol to the raw TCP protocol.
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		log.Print("hijacking not supported by the underlying connection handler")
+		return
+	}
+
+	// Hijack the connection. This returns the underlying net.Conn object.
+	conn, _, err := hijacker.Hijack()
+	if err != nil {
+		// If hijacking fails, log the error and return.
+		log.Print("rpc hijacking ", req.RemoteAddr, ": ", err.Error())
+		return
+	}
+
+	// After a successful hijack, we must immediately send an HTTP response to the client to confirm the tunnel is established.
+	// This response tells the client, "I've opened the tunnel for you; you can now start sending your encrypted data."
+	// "200 Connection established" is a standard response for this.
+	// Note that we are writing directly to the hijacked TCP connection (conn), not the http.ResponseWriter (w).
+	// The 'connected' variable is a string constant, likely "200 Connection established".
+	_, _ = io.WriteString(conn, "HTTP/1.0 "+Connected+"\n\n")
+
+	// Pass the hijacked connection (conn) to the Server's ServeConn method.
+	// ServeConn will typically handle the subsequent communication, such as establishing a proxy tunnel and forwarding data from conn to the destination server.
+	// From this point on, all communication between the client and the server is a raw TCP data stream, independent of the HTTP protocol.
+	server.ServeConn(conn)
+}
+
+// HandleHTTP registers an HTTP handler for building a RPC connection on rpcPath
+// It is still necessary to invoke http.Serve(), typically in a go statement
+func (server *Server) HandleHTTP() {
+	http.Handle(DefaultRPCPath, server)
+	http.Handle(DefaultDebugPath, debugHTTP{server})
+	log.Println("rpc server debug path: ", DefaultDebugPath)
+}
+
+// HandleHTTP is a convenient approach for default server to register HTTP handlers
+func HandleHTTP() {
+	DefaultServer.HandleHTTP()
 }
