@@ -48,6 +48,13 @@ var _ io.Closer = (*Client)(nil)
 
 var ErrShutdown = errors.New("connetion is shut down")
 
+// Return whether thid client is available
+func (client *Client) IsAvailable() bool {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	return !(client.closing || client.shutdown)
+}
+
 // Close the connection
 func (client *Client) Close() error {
 	client.mu.Lock()
