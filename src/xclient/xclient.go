@@ -8,6 +8,7 @@ import (
 	"sync"
 )
 
+// TODO: add with name function
 type XClient struct {
 	d Discovery
 	mode SelectMode
