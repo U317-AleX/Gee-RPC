@@ -14,6 +14,8 @@ import (
 
 type Foo int
 
+const basic string = "basic"
+
 type Args struct{ Num1, Num2 int }
 
 func (f Foo) Sum(args Args, reply *int) error {
@@ -32,9 +34,9 @@ func foo(xc *xclient.XClient, ctx context.Context, typ, serviceMethod string, ar
 	var err error
 	switch typ {
 	case "call":
-		err = xc.Call(ctx, serviceMethod, args, &reply)
+		err = xc.Call(ctx, serviceMethod, args, &reply, basic)
 	case "broadcast":
-		err = xc.Broadcast(ctx, serviceMethod, args, &reply)
+		err = xc.Broadcast(ctx, serviceMethod, args, &reply, basic)
 	}
 	if err != nil {
 		log.Printf("%s %s error: %v", typ, serviceMethod, err)
@@ -55,7 +57,7 @@ func startServer(registryAddr string, wg *sync.WaitGroup) {
 	l, _ := net.Listen("tcp", ":0")
 	server := service.NewServer()
 	_ = server.Register(&foo)
-	service.Heartbeat(registryAddr, "tcp@"+l.Addr().String(), 0)
+	service.Heartbeat(registryAddr, "tcp@"+l.Addr().String(), 0, basic)
 	wg.Done()
 	server.Accept(l)
 }

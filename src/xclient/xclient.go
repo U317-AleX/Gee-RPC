@@ -8,25 +8,26 @@ import (
 	"sync"
 )
 
+// TODO: add with name function
 type XClient struct {
-	d Discovery
-	mode SelectMode
-	opt *service.Option
-	mu sync.Mutex
+	d       Discovery
+	mode    SelectMode
+	opt     *service.Option
+	mu      sync.Mutex
 	clients map[string]*client.Client
 }
 
-// The XClient constructor requires three parameters: 
-// the service discovery instance Discovery, 
-// the load balancing mode SelectMode, and the protocol option Option. 
-// To maximize the reuse of existing socket connections, 
-// clients is used to store successfully created Client instances, 
+// The XClient constructor requires three parameters:
+// the service discovery instance Discovery,
+// the load balancing mode SelectMode, and the protocol option Option.
+// To maximize the reuse of existing socket connections,
+// clients is used to store successfully created Client instances,
 // and a Close method is provided to close the established connection upon completion.
 func NewXClient(d Discovery, mode SelectMode, opt *service.Option) *XClient {
 	return &XClient{
-		d: d,
-		mode: mode,
-		opt: opt,
+		d:       d,
+		mode:    mode,
+		opt:     opt,
 		clients: make(map[string]*client.Client),
 	}
 }
@@ -75,9 +76,9 @@ func (xc *XClient) call(rpcAddr string, ctx context.Context, serviceMethod strin
 // Call invokes the named function, waits for it to complete
 // and returns its error status
 // xc will choose a proper server according to load-balance mode
-func (xc *XClient) Call(ctx context.Context, serviceMethod string, args, reply interface{}) error {
+func (xc *XClient) Call(ctx context.Context, serviceMethod string, args, reply interface{}, name ...string) error {
 	// get the current rpcAddr to use for load-balance
-	rpcAddr, err := xc.d.Get(xc.mode)
+	rpcAddr, err := xc.d.Get(xc.mode, name...)
 	if err != nil {
 		return err
 	}
@@ -85,8 +86,8 @@ func (xc *XClient) Call(ctx context.Context, serviceMethod string, args, reply i
 }
 
 // Broadcast invokes the named function for every server registered in discovery
-func (xc *XClient) Broadcast(ctx context.Context, serviceMethod string, args, reply interface{}) error {
-	servers, err := xc.d.GetAll()
+func (xc *XClient) Broadcast(ctx context.Context, serviceMethod string, args, reply interface{}, name ...string) error {
+	servers, err := xc.d.GetAll(name...)
 	if err != nil {
 		return err
 	}
@@ -96,7 +97,7 @@ func (xc *XClient) Broadcast(ctx context.Context, serviceMethod string, args, re
 	ctx, cancel := context.WithCancel(ctx)
 	for _, rpcAddr := range servers {
 		wg.Add(1)
-		go func(rpcAddr string)  {
+		go func(rpcAddr string) {
 			defer wg.Done()
 			clonedReply := reflect.New(reflect.ValueOf(reply).Elem().Type()).Interface()
 			err := xc.call(rpcAddr, ctx, serviceMethod, args, clonedReply)
