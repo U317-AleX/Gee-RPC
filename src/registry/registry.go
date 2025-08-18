@@ -58,24 +58,20 @@ func (r *GeeRegister) putServer(addr string) {
 
 func (r *GeeRegister) putServerWithName(name, addr string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	svi := r.services[name]
-	if svi == nil {
-		r.services[name] = make(servers)
-		r.services[name][addr] = &ServerItem{
-			Addr: addr,
-			start: time.Now(),
-		}
-		return
-	}
-	if svi[addr] == nil{
-		r.services[name][addr] = &ServerItem{
-			Addr: addr,
-			start: time.Now(),
-		}
-		return
-	}
-	r.services[name][addr].start = time.Now()
+    defer r.mu.Unlock()
+    servers, ok := r.services[name]
+    if !ok {
+        servers = make(map[string]*ServerItem)
+        r.services[name] = servers
+    }
+    serverItem, ok := servers[addr]
+    if !ok {
+        serverItem = &ServerItem{
+            Addr: addr,
+        }
+        servers[addr] = serverItem
+    }
+    serverItem.start = time.Now()
 }
 
 func (r *GeeRegister) aliveServers() []string {
@@ -108,7 +104,6 @@ func (r *GeeRegister) aliveServersWithName(name string) []string {
 	return aliveServers
 }
 
-// TODO: Registry withName functions here
 func (r *GeeRegister) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "GET":
