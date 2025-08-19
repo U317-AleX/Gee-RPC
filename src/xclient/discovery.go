@@ -72,7 +72,8 @@ func (d *MultiServersDiscovery) Update(servers []string, name ...string) error {
 		if len(name) != 1 {
 			return errors.ErrUnsupported
 		}
-		d.services[name[0]] = servers
+		_name := "local:" + strings.TrimPrefix(name[0], "local:")
+		d.services[_name] = servers
 		return nil
 	}
 	d.servers = servers
@@ -231,7 +232,7 @@ func (d *GeeRegistryDiscovery) Update(servers []string, name ...string) error {
 		if len(name) != 1 {
 			return errors.ErrUnsupported
 		}
-		_name := "local:" + name[0]
+		_name := "local:" + strings.TrimPrefix(name[0], "local:")
 		d.services[_name] = servers
 		d.lastUpdateWithName[_name] = time.Now()
 		d.serviceNames[_name] = local
