@@ -171,7 +171,7 @@ func NewGeeRegistryDiscovery(registerAddr string, timeout time.Duration) *GeeReg
 	return d
 }
 
-
+// Refresh remote service name and return all service name
 func (d *GeeRegistryDiscovery) GetNames(_useLocalCache ...bool) ([]string, error) {
 	if len(_useLocalCache) > 1 {
 		return nil, errors.ErrUnsupported
@@ -216,7 +216,6 @@ func (d *GeeRegistryDiscovery) GetNames(_useLocalCache ...bool) ([]string, error
 			d.serviceNames[name] = remote
 		}
 	}
-
 	_names := make([]string, 0)
 	for name := range d.serviceNames {
 		_names = append(_names, name)
@@ -224,25 +223,27 @@ func (d *GeeRegistryDiscovery) GetNames(_useLocalCache ...bool) ([]string, error
 	return _names, nil
 }
 
+// Update the servers of discovery if needed
 func (d *GeeRegistryDiscovery) Update(servers []string, name ...string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-
 	if len(name) > 0 {
 		if len(name) != 1 {
 			return errors.ErrUnsupported
 		}
-		d.services[name[0]] = servers
-		d.lastUpdateWithName[name[0]] = time.Now()
-		d.serviceNames[name[0]] = local
+		_name := "local:" + name[0]
+		d.services[_name] = servers
+		d.lastUpdateWithName[_name] = time.Now()
+		d.serviceNames[_name] = local
 		return nil
 	}
-	
 	d.servers = servers
 	d.lastUpdate = time.Now()
 	return nil
 }
 
+// Refresh remote service with remote name, 
+// it would not affect service with local name
 func (d *GeeRegistryDiscovery) Refresh(name ...string) error {
 	d.GetNames(false)
 	
@@ -252,6 +253,9 @@ func (d *GeeRegistryDiscovery) Refresh(name ...string) error {
 	if len(name) > 0 {
 		if len(name) != 1 {
 			return errors.ErrUnsupported
+		}
+		if d.serviceNames[name[0]] == local {
+			return nil
 		}
 		if d.lastUpdateWithName[name[0]].Add(d.timeout).After(time.Now()) {
 			return nil
