@@ -14,7 +14,7 @@ import (
 
 type Foo int
 
-const basic string = "basic"
+const basic string = "remote:basic"
 
 type Args struct{ Num1, Num2 int }
 
@@ -34,6 +34,7 @@ func foo(xc *xclient.XClient, ctx context.Context, typ, serviceMethod string, ar
 	var err error
 	names, _ := xc.GetNames()
 	name := names[0]
+	log.Println(name)
 	switch typ {
 	case "call":
 		err = xc.Call(ctx, serviceMethod, args, &reply, name)

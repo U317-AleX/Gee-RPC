@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -35,7 +36,7 @@ func sendHeartbeat(registry, addr string, name ...string) error {
 		if len(name) != 1 {
 			return errors.ErrUnsupported
 		}
-		_name := "remote:" + name[0]
+		_name := "remote:" + strings.TrimPrefix(name[0], "remote:")
 		log.Println(addr, "send heart beat to registry center with name", registry)
 		httpClient := &http.Client{}
 		req, _ := http.NewRequest("POST", registry, nil)
