@@ -104,21 +104,41 @@ func (r *GeeRegister) aliveServersWithName(name string) []string {
 	return aliveServers
 }
 
+// get service names
+func (r *GeeRegister) getNames() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	names := make([]string, 0)
+	for name := range r.services {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func (r *GeeRegister) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "GET":
 		query := req.URL.Query()
-		serviceName := query.Get("name")
-		if serviceName != "" {
-			w.Header().Set("X-Geerpc-Servers", strings.Join(r.aliveServersWithName(serviceName), ","))
-			return
+		methodName := query.Get("method")
+		switch methodName {
+		case "Get-Servers":
+			serviceName := query.Get("name")
+			if serviceName != "" {
+				w.Header().Set("X-Geerpc-Servers", strings.Join(r.aliveServersWithName(serviceName), ","))
+				return
+			}
+			w.Header().Set("X-Geerpc-Servers", strings.Join(r.aliveServers(), ","))
+		case "Get-Names":
+			w.Header().Set("X-Geerpc-Names", strings.Join(r.getNames(), ","))
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
-		w.Header().Set("X-Geerpc-Servers", strings.Join(r.aliveServers(), ","))
 	case "POST":
 		addr := req.Header.Get("X-Geerpc-Server")
 		name := req.Header.Get("X-Geerpc-Name")
 		if addr == "" {
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		if name != "" {

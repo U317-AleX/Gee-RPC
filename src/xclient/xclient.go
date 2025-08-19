@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// TODO: add with name function
+
 type XClient struct {
 	d       Discovery
 	mode    SelectMode
@@ -30,6 +30,15 @@ func NewXClient(d Discovery, mode SelectMode, opt *service.Option) *XClient {
 		opt:     opt,
 		clients: make(map[string]*client.Client),
 	}
+}
+
+// Get service names
+func (xc *XClient) GetNames() ([]string, error) {
+	names, err := xc.d.GetNames(true)
+	if err != nil {
+		return nil, err
+	}
+	return names, nil
 }
 
 func (xc *XClient) Close() error {

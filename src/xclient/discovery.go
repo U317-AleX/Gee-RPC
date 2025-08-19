@@ -26,6 +26,7 @@ type Discovery interface {
 	Update(servers []string, name ...string) error
 	Get(mode SelectMode, name ...string) (string, error)
 	GetAll(name ...string) ([]string, error)
+	GetNames(useLocalCache bool) ([]string, error) // get service names
 }
 
 type MultiServersDiscovery struct {
@@ -33,7 +34,7 @@ type MultiServersDiscovery struct {
 	mu sync.RWMutex // protect following
 	servers []string // address of a server
 	index int // record the selected position for robin algorithm
-	services map[string][]string // service name to server addresses
+	services map[string][]string // service name to server
 }
 
 func NewMultiServerDiscovery(servers []string) *MultiServersDiscovery {
@@ -47,6 +48,16 @@ func NewMultiServerDiscovery(servers []string) *MultiServersDiscovery {
 }
 
 var _Discovery = (*MultiServersDiscovery) (nil)
+
+
+func (d *MultiServersDiscovery) GetNames() ([]string, error) {
+	// return local cache names
+	names := make([]string, 0)
+	for name := range d.services {
+		names = append(names, name)
+	}
+	return names, nil
+}
 
 // Refresh doesn't make sense for MultiServerDiscovery, so ignore it
 func (d *MultiServersDiscovery) Refresh(name ...string) error {
@@ -132,6 +143,7 @@ func (d *MultiServersDiscovery) GetAll(name ...string) ([]string, error) {
 // but it use registry center
 type GeeRegistryDiscovery struct {
 	*MultiServersDiscovery
+	serviceNames map[string]interface{} // serviceNames
 	registry string // the url for registry center
 	timeout time.Duration // to avoid using useless server 
 	lastUpdate time.Time //to avoid using useless server
@@ -149,31 +161,70 @@ func NewGeeRegistryDiscovery(registerAddr string, timeout time.Duration) *GeeReg
 		registry: registerAddr,
 		timeout: timeout,
 		lastUpdateWithName: map[string]time.Time{},
+		serviceNames: map[string]interface{}{},
 	}
 	return d
 }
 
 
+func (d *GeeRegistryDiscovery) GetNames(useLocalCache bool) ([]string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if useLocalCache && d.lastUpdate.Add(d.timeout).After(time.Now()) {
+		names := make([]string, 0)
+		for name := range d.serviceNames {
+			names = append(names, name)
+		}
+		return names, nil
+	}
+
+	params := url.Values{}
+	params.Add("method", "Get-Names")
+	fullURL := fmt.Sprintf("%s?%s",d.registry, params.Encode())
+	resp, err := http.Get(fullURL)
+	if err != nil {
+		log.Println("rpc registry getnames err", err)
+		return nil, err
+	}
+	names := strings.Split(resp.Header.Get("X-Geerpc-Names"), ",")
+	for _, name := range names {
+		d.serviceNames[name] = ""
+	}
+	_names := make([]string, 0)
+	for name := range d.serviceNames {
+		_names = append(_names, name)
+	}
+	return _names, nil
+}
+
 func (d *GeeRegistryDiscovery) Update(servers []string, name ...string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	if len(name) > 0 {
 		if len(name) != 1 {
 			return errors.ErrUnsupported
 		}
 		d.services[name[0]] = servers
 		d.lastUpdateWithName[name[0]] = time.Now()
+		for serviceName := range d.services {
+			d.serviceNames[serviceName] = ""
+		}
 		return nil
 	}
+
 	d.servers = servers
 	d.lastUpdate = time.Now()
 	return nil
 }
 
 func (d *GeeRegistryDiscovery) Refresh(name ...string) error {
+	d.GetNames(false)
+	
 	d.mu.Lock()
 	defer d.mu.Unlock()
-
+	
 	if len(name) > 0 {
 		if len(name) != 1 {
 			return errors.ErrUnsupported
@@ -183,6 +234,7 @@ func (d *GeeRegistryDiscovery) Refresh(name ...string) error {
 		}
 		log.Println("rpc registry with name: refresh servers from registry", d.registry)
 		params := url.Values{}
+		params.Add("method", "Get-Servers")
 		params.Add("name", name[0])
 		fullURL := fmt.Sprintf("%s?%s",d.registry, params.Encode())
 		resp, err := http.Get(fullURL)
@@ -205,7 +257,10 @@ func (d *GeeRegistryDiscovery) Refresh(name ...string) error {
 		return nil
 	}
 	log.Println("rpc registry: refresh servers from registry", d.registry)
-	resp, err := http.Get(d.registry)
+	params := url.Values{}
+	params.Add("method", "Get-Servers")
+	fullURL := fmt.Sprintf("%s?%s",d.registry, params.Encode())
+	resp, err := http.Get(fullURL)
 	if err != nil {
 		log.Println("rpc registry refresh err", err)
 		return err
