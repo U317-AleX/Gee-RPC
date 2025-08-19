@@ -74,6 +74,7 @@ func (r *GeeRegister) putServerWithName(name, addr string) {
     serverItem.start = time.Now()
 }
 
+// delete timeout server and return alive server
 func (r *GeeRegister) aliveServers() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -89,6 +90,7 @@ func (r *GeeRegister) aliveServers() []string {
 	return aliveServers
 }
 
+// delete timeout server and return alive server with name
 func (r *GeeRegister) aliveServersWithName(name string) []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
