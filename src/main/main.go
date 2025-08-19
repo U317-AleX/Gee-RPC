@@ -33,11 +33,12 @@ func foo(xc *xclient.XClient, ctx context.Context, typ, serviceMethod string, ar
 	var reply int
 	var err error
 	names, _ := xc.GetNames()
+	name := names[0]
 	switch typ {
 	case "call":
-		err = xc.Call(ctx, serviceMethod, args, &reply, names[0])
+		err = xc.Call(ctx, serviceMethod, args, &reply, name)
 	case "broadcast":
-		err = xc.Broadcast(ctx, serviceMethod, args, &reply, names[0])
+		err = xc.Broadcast(ctx, serviceMethod, args, &reply, name)
 	}
 	if err != nil {
 		log.Printf("%s %s error: %v", typ, serviceMethod, err)
