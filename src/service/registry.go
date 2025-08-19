@@ -35,10 +35,11 @@ func sendHeartbeat(registry, addr string, name ...string) error {
 		if len(name) != 1 {
 			return errors.ErrUnsupported
 		}
+		_name := "remote:" + name[0]
 		log.Println(addr, "send heart beat to registry center with name", registry)
 		httpClient := &http.Client{}
 		req, _ := http.NewRequest("POST", registry, nil)
-		req.Header.Set("X-Geerpc-Name", name[0])
+		req.Header.Set("X-Geerpc-Name", _name)
 		req.Header.Set("X-Geerpc-Server", addr)
 		if _, err := httpClient.Do(req); err != nil {
 			log.Println("rpc server: heart beat with name err", err)
