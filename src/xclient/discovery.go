@@ -26,7 +26,7 @@ type Discovery interface {
 	Update(servers []string, name ...string) error
 	Get(mode SelectMode, name ...string) (string, error)
 	GetAll(name ...string) ([]string, error)
-	GetNames(useLocalCache bool) ([]string, error) // get service names
+	GetNames(_useLocalCache ...bool) ([]string, error) // get service names
 }
 
 type MultiServersDiscovery struct {
@@ -50,7 +50,7 @@ func NewMultiServerDiscovery(servers []string) *MultiServersDiscovery {
 var _Discovery = (*MultiServersDiscovery) (nil)
 
 
-func (d *MultiServersDiscovery) GetNames() ([]string, error) {
+func (d *MultiServersDiscovery) GetNames(_useLocalCache ...string) ([]string, error) {
 	// return local cache names
 	names := make([]string, 0)
 	for name := range d.services {
@@ -139,6 +139,11 @@ func (d *MultiServersDiscovery) GetAll(name ...string) ([]string, error) {
 	return servers, nil
 }
 
+const (
+	local int = iota
+	remote 
+)
+
 // GeeRegisterDiscovery is similar to ultiServersDiscovery
 // but it use registry center
 type GeeRegistryDiscovery struct {
@@ -167,7 +172,18 @@ func NewGeeRegistryDiscovery(registerAddr string, timeout time.Duration) *GeeReg
 }
 
 
-func (d *GeeRegistryDiscovery) GetNames(useLocalCache bool) ([]string, error) {
+func (d *GeeRegistryDiscovery) GetNames(_useLocalCache ...bool) ([]string, error) {
+	if len(_useLocalCache) > 1 {
+		return nil, errors.ErrUnsupported
+	}
+
+	var useLocalCache bool
+	if len(_useLocalCache) == 0 {
+		useLocalCache = true
+	} else {
+		useLocalCache = _useLocalCache[0]
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -188,9 +204,19 @@ func (d *GeeRegistryDiscovery) GetNames(useLocalCache bool) ([]string, error) {
 		return nil, err
 	}
 	names := strings.Split(resp.Header.Get("X-Geerpc-Names"), ",")
-	for _, name := range names {
-		d.serviceNames[name] = ""
+	// delete local cache of remote names
+	for name := range d.serviceNames {
+		if d.serviceNames[name] == remote {
+			delete(d.serviceNames, name)
+		}
 	}
+	// update local cache of remote names
+	for _, name := range names {
+		if d.serviceNames[name] == nil {
+			d.serviceNames[name] = remote
+		}
+	}
+
 	_names := make([]string, 0)
 	for name := range d.serviceNames {
 		_names = append(_names, name)
@@ -208,12 +234,10 @@ func (d *GeeRegistryDiscovery) Update(servers []string, name ...string) error {
 		}
 		d.services[name[0]] = servers
 		d.lastUpdateWithName[name[0]] = time.Now()
-		for serviceName := range d.services {
-			d.serviceNames[serviceName] = ""
-		}
+		d.serviceNames[name[0]] = local
 		return nil
 	}
-
+	
 	d.servers = servers
 	d.lastUpdate = time.Now()
 	return nil
