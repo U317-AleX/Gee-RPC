@@ -32,11 +32,12 @@ func (f Foo) Sleep(args Args, reply *int) error {
 func foo(xc *xclient.XClient, ctx context.Context, typ, serviceMethod string, args *Args) {
 	var reply int
 	var err error
+	names, _ := xc.GetNames()
 	switch typ {
 	case "call":
-		err = xc.Call(ctx, serviceMethod, args, &reply, basic)
+		err = xc.Call(ctx, serviceMethod, args, &reply, names[0])
 	case "broadcast":
-		err = xc.Broadcast(ctx, serviceMethod, args, &reply, basic)
+		err = xc.Broadcast(ctx, serviceMethod, args, &reply, names[0])
 	}
 	if err != nil {
 		log.Printf("%s %s error: %v", typ, serviceMethod, err)
@@ -56,7 +57,7 @@ func startServer(registryAddr string, wg *sync.WaitGroup) {
 	var foo Foo
 	l, _ := net.Listen("tcp", ":0")
 	server := service.NewServer()
-	_ = server.Register(&foo)
+	_ = server.Registry(&foo)
 	service.Heartbeat(registryAddr, "tcp@"+l.Addr().String(), 0, basic)
 	wg.Done()
 	server.Accept(l)

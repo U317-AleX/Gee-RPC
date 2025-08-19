@@ -41,7 +41,7 @@ type Server struct {
 	serviceMap sync.Map
 }
 
-func (server *Server) Register(rcvr interface{}) error {
+func (server *Server) Registry(rcvr interface{}) error {
 	s := newService(rcvr)
 	if _, dup := server.serviceMap.LoadOrStore(s.name, s); dup {
 		return errors.New("rpc: service already defined: " + s.name)
@@ -49,8 +49,8 @@ func (server *Server) Register(rcvr interface{}) error {
 	return nil
 }
 
-func Register(rcvr interface{}) error {
-	return DefaultServer.Register(rcvr)
+func Registry(rcvr interface{}) error {
+	return DefaultServer.Registry(rcvr)
 }
 
 // use string serviceMethod who has format "<service>.<method>"
@@ -293,7 +293,7 @@ func (server *Server) HandleHTTP() {
 	log.Println("rpc server debug path: ", DefaultDebugPath)
 }
 
-// HandleHTTP is a convenient approach for default server to register HTTP handlers
+// HandleHTTP is a convenient approach for default server to registry HTTP handlers
 func HandleHTTP() {
 	DefaultServer.HandleHTTP()
 }

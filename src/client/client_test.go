@@ -46,7 +46,7 @@ func (b Bar) Timeout(argv int, reply *int) error {
 
 func startServer(addr chan string) {
 	var b Bar
-	_ = service.Register(&b)
+	_ = service.Registry(&b)
 	// pick a free port
 	l, _ := net.Listen("tcp", ":0")
 	addr <- l.Addr().String()
