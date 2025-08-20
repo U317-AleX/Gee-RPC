@@ -60,11 +60,11 @@ func newService(rcvr interface{}) *service {
 	if !ast.IsExported(s.name) {
 		log.Fatalf("rpc server: %s is not a valid service name", s.name)
 	}
-	s.registerMethods()
+	s.registryMethods()
 	return s
 }
 
-func (s *service) registerMethods() {
+func (s *service) registryMethods() {
 	s.method = make(map[string]*methodType)
 	for i := 0; i < s.typ.NumMethod(); i++ {
 		method := s.typ.Method(i)

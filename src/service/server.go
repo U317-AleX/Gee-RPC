@@ -285,7 +285,7 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	server.ServeConn(conn)
 }
 
-// HandleHTTP registers an HTTP handler for building a RPC connection on rpcPath
+// HandleHTTP registrys an HTTP handler for building a RPC connection on rpcPath
 // It is still necessary to invoke http.Serve(), typically in a go statement
 func (server *Server) HandleHTTP() {
 	http.Handle(DefaultRPCPath, server)

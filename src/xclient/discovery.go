@@ -145,7 +145,7 @@ const (
 	remote 
 )
 
-// GeeRegisterDiscovery is similar to ultiServersDiscovery
+// GeeRegistryDiscovery is similar to ultiServersDiscovery
 // but it use registry center
 type GeeRegistryDiscovery struct {
 	*MultiServersDiscovery
@@ -158,13 +158,13 @@ type GeeRegistryDiscovery struct {
 
 const defaultTimeout = time.Second * 10
 
-func NewGeeRegistryDiscovery(registerAddr string, timeout time.Duration) *GeeRegistryDiscovery {
+func NewGeeRegistryDiscovery(registryAddr string, timeout time.Duration) *GeeRegistryDiscovery {
 	if timeout == 0 {
 		timeout = defaultTimeout
 	}
 	d := &GeeRegistryDiscovery{
 		MultiServersDiscovery: NewMultiServerDiscovery(make([]string, 0)),
-		registry: registerAddr,
+		registry: registryAddr,
 		timeout: timeout,
 		lastUpdateWithName: map[string]time.Time{},
 		serviceNames: map[string]interface{}{},

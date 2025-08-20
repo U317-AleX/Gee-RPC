@@ -38,7 +38,7 @@ type Client struct {
 	sending sync.Mutex // make sure sending in order
 	header codec.Header
 	mu sync.Mutex // protect following
-	seq uint64 // Call ID, client use this to register Call
+	seq uint64 // Call ID, client use this to registry Call
 	pending map[uint64]*Call // calls waitting to be handled
 	closing bool // user has called Close
 	shutdown bool // server has told us to stop
@@ -67,7 +67,7 @@ func (client *Client) Close() error {
 }
 
 // Give a Call ID and add it to pending
-func (client *Client) registerCall(call *Call) (uint64, error) {
+func (client *Client) registryCall(call *Call) (uint64, error) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	if client.closing || client.shutdown {
@@ -241,8 +241,8 @@ func (client *Client) send(call *Call) {
 	client.sending.Lock()
 	defer client.sending.Unlock()
 
-	// register this call
-	seq, err := client.registerCall(call)
+	// registry this call
+	seq, err := client.registryCall(call)
 	if err != nil {
 		call.Error = err
 		call.done()
