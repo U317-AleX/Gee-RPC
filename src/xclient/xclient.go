@@ -94,7 +94,7 @@ func (xc *XClient) Call(ctx context.Context, serviceMethod string, args, reply i
 	return xc.call(rpcAddr, ctx, serviceMethod, args, reply)
 }
 
-// Broadcast invokes the named function for every server registered in discovery
+// Broadcast invokes the named function for every server registryed in discovery
 func (xc *XClient) Broadcast(ctx context.Context, serviceMethod string, args, reply interface{}, name ...string) error {
 	servers, err := xc.d.GetAll(name...)
 	if err != nil {

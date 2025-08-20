@@ -15,7 +15,7 @@ import (
 
 type servers map[string]*ServerItem
 
-type GeeRegister struct {
+type GeeRegistry struct {
 	timeout time.Duration
 	mu sync.Mutex
 	servers servers // address to ServerItem
@@ -32,17 +32,17 @@ const (
 	defaultTimeout = time.Minute * 5
 )
 
-func New(timeout time.Duration) *GeeRegister {
-	return &GeeRegister{
+func New(timeout time.Duration) *GeeRegistry {
+	return &GeeRegistry{
 		timeout: timeout,
 		servers: make(map[string]*ServerItem),
 		services: make(map[string]servers),
 	}
 }
 
-var DefaultGeeRegister = New(defaultTimeout)
+var DefaultGeeRegistry = New(defaultTimeout)
 
-func (r *GeeRegister) putServer(addr string) {
+func (r *GeeRegistry) putServer(addr string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	s := r.servers[addr]
@@ -56,7 +56,7 @@ func (r *GeeRegister) putServer(addr string) {
 	}
 }
 
-func (r *GeeRegister) putServerWithName(name, addr string) {
+func (r *GeeRegistry) putServerWithName(name, addr string) {
 	r.mu.Lock()
     defer r.mu.Unlock()
     servers, ok := r.services[name]
@@ -75,7 +75,7 @@ func (r *GeeRegister) putServerWithName(name, addr string) {
 }
 
 // delete timeout server and return alive server
-func (r *GeeRegister) aliveServers() []string {
+func (r *GeeRegistry) aliveServers() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	aliveServers := make([]string, 0)
@@ -91,7 +91,7 @@ func (r *GeeRegister) aliveServers() []string {
 }
 
 // delete timeout server and return alive server with name
-func (r *GeeRegister) aliveServersWithName(name string) []string {
+func (r *GeeRegistry) aliveServersWithName(name string) []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	aliveServers := make([]string, 0)
@@ -107,7 +107,7 @@ func (r *GeeRegister) aliveServersWithName(name string) []string {
 }
 
 // get service names
-func (r *GeeRegister) getNames() []string {
+func (r *GeeRegistry) getNames() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	names := make([]string, 0)
@@ -118,7 +118,7 @@ func (r *GeeRegister) getNames() []string {
 	return names
 }
 
-func (r *GeeRegister) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (r *GeeRegistry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "GET":
 		query := req.URL.Query()
@@ -153,11 +153,11 @@ func (r *GeeRegister) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *GeeRegister) HandleHTTP(registerPath string) {
-	http.Handle(registerPath, r)
-	log.Println("rpc registry path: ", registerPath)
+func (r *GeeRegistry) HandleHTTP(registryPath string) {
+	http.Handle(registryPath, r)
+	log.Println("rpc registry path: ", registryPath)
 }
 
 func HandleHTTP() {
-	DefaultGeeRegister.HandleHTTP(defaultPath)
+	DefaultGeeRegistry.HandleHTTP(defaultPath)
 }
